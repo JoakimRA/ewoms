@@ -29,6 +29,7 @@ namespace Opm {
         if( wells_ )
         {
             invDuneD_.setBuildMode( Mat::row_wise );
+            duneD_.setBuildMode( Mat::row_wise );
             duneC_.setBuildMode( Mat::row_wise );
             duneB_.setBuildMode( Mat::row_wise );
          }
@@ -88,6 +89,9 @@ namespace Opm {
         // set invDuneD
         invDuneD_.setSize( nw, nw, nw );
 
+        // set duneD
+        duneD_.setSize( nw, nw, nw );
+
         // set duneC
         duneC_.setSize( nw, nc, nperf );
 
@@ -95,6 +99,11 @@ namespace Opm {
         duneB_.setSize( nw, nc, nperf );
 
         for (auto row=invDuneD_.createbegin(), end = invDuneD_.createend(); row!=end; ++row) {
+            // Add nonzeros for diagonal
+            row.insert(row.index());
+        }
+
+        for (auto row=duneD_.createbegin(), end = duneD_.createend(); row!=end; ++row) {
             // Add nonzeros for diagonal
             row.insert(row.index());
         }
@@ -3271,7 +3280,69 @@ namespace Opm {
         }
     }
 
+    template<typename TypeTag>
+    const Mat&
+    StandardWellsDense<TypeTag>::
+    B() const
+    {
+        return *duneB_;
+    }
 
+    template<typename TypeTag>
+    Mat&
+    StandardWellsDense<TypeTag>::
+    B()
+    {
+        return *duneB_;
+    }
+
+    template<typename TypeTag>
+    const Mat&
+    StandardWellsDense<TypeTag>::
+    C() const
+    {
+        return *duneC_;
+    }
+
+    template<typename TypeTag>
+    Mat&
+    StandardWellsDense<TypeTag>::
+    C()
+    {
+        return *duneC_;
+    }
+
+    template<typename TypeTag>
+    const Mat&
+    StandardWellsDense<TypeTag>::
+    D() const
+    {
+        return *duneD_;
+    }
+
+    template<typename TypeTag>
+    Mat&
+    StandardWellsDense<TypeTag>::
+    D()
+    {
+        return *duneD_;
+    }
+
+    template<typename TypeTag>
+    const Mat&
+    StandardWellsDense<TypeTag>::
+    invD() const
+    {
+        return *invDuneD_;
+    }
+
+    template<typename TypeTag>
+    Mat&
+    StandardWellsDense<TypeTag>::
+    invD()
+    {
+        return *invDuneD_;
+    }
 
 
 } // namespace Opm

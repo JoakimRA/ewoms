@@ -291,6 +291,24 @@ enum WellVariablePositions {
 
             void applyVREPGroupControl(WellState& well_state) const;
 
+            const Mat& B() const;
+
+            Mat& B();
+
+            const Mat& C() const;
+
+            Mat& C();
+
+            const Mat& D() const;
+
+            Mat& D();
+
+            const Mat& invD() const;
+
+            Mat& invD();
+
+
+
 
         protected:
             bool wells_active_;
@@ -337,6 +355,7 @@ enum WellVariablePositions {
             Mat duneB_;
             Mat duneC_;
             Mat invDuneD_;
+            Mat duneD_;
 
             BVector resWell_;
 
