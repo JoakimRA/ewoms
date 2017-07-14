@@ -336,6 +336,7 @@ namespace Opm {
 
 
                 auto& A = ebosSimulator_.model().linearizer().matrixA(); // The gt
+                auto& A2 = ebosSimulator_.model().linearizer().matrixA2(); // The gt
 
 
                 // ------------  create and setup the matrices for the jacobians -----------------------start
@@ -344,7 +345,9 @@ namespace Opm {
                 typedef Dune::FieldMatrix<Scalar,2,2> M;
                 Dune::BCRSMatrix<M> numJac(9,9, Dune::BCRSMatrix<M>::random);
                 Dune::BCRSMatrix<M> adJac(9,9, Dune::BCRSMatrix<M>::random);
+                Dune::BCRSMatrix<M> adJac2(9,9, Dune::BCRSMatrix<M>::random);
                 Dune::BCRSMatrix<M> diffJac(9,9, Dune::BCRSMatrix<M>::random);
+                Dune::BCRSMatrix<M> diffJac2(9,9, Dune::BCRSMatrix<M>::random);
 
 
                 //Dune::printmatrix(std::cout, A, "title...", "row");
@@ -353,23 +356,31 @@ namespace Opm {
                 for (int row=0; row < 9; ++row){
                     numJac.setrowsize(row, 9);
                     adJac.setrowsize(row, 9);
+                    adJac2.setrowsize(row, 9);
                     diffJac.setrowsize(row,9);
+                    diffJac2.setrowsize(row,9);
                 }
                 numJac.endrowsizes();
                 adJac.endrowsizes();
+                adJac2.endrowsizes();
                 diffJac.endrowsizes();
+                diffJac2.endrowsizes();
 
                 // Specify where we want to be able to index/place values later.
                 for (int row=0; row < 9; ++row){
                     for (int col=0; col < 9; ++col){
                         numJac.addindex(row, col);
                         adJac.addindex(row, col);
+                        adJac2.addindex(row, col);
                         diffJac.addindex(row, col);
+                        diffJac2.addindex(row, col);
                     }
                 }
                 numJac.endindices();
                 adJac.endindices();
+                adJac2.endindices();
                 diffJac.endindices();
+                diffJac2.endindices();
 
 
                 // Copy the relevant elements from the AD jacobian made by the simulator.
@@ -380,6 +391,12 @@ namespace Opm {
                             adJac[row_block][col_block][0][1] = A[row_block][col_block][0][1];
                             adJac[row_block][col_block][1][0] = A[row_block][col_block][1][0];
                             adJac[row_block][col_block][1][1] = A[row_block][col_block][1][1];
+                        }
+                        if (A2.exists(row_block, col_block)){
+                            adJac2[row_block][col_block][0][0] = A2[row_block][col_block][0][0];
+                            adJac2[row_block][col_block][0][1] = A2[row_block][col_block][0][1];
+                            adJac2[row_block][col_block][1][0] = A2[row_block][col_block][1][0];
+                            adJac2[row_block][col_block][1][1] = A2[row_block][col_block][1][1];
                         }
                     }
                 }
@@ -396,6 +413,36 @@ namespace Opm {
                 std::vector<GlobalEqVector> residualValues(2); // {f(x - dx/2), f(x + dx/2)}
                 std::vector<Scalar> pert_sizes = {-0.000001, -10}; // Using a negative value is the same as applying a positive perturbation.
                 Dune::printmatrix(std::cout, adJac, "ad", "row");
+                Dune::printmatrix(std::cout, adJac2, "ad", "row");
+
+                // Calculate the difference between adJac and adJac2. If the difference is really small, set it to zero.
+                for(std::size_t row_block=0; row_block < 9; ++row_block ){
+                    for(std::size_t col_block=0; col_block < 9; ++col_block ){
+                        for(std::size_t row_in_block=0; row_in_block < 2; ++row_in_block ){
+                            for(std::size_t col_in_block=0; col_in_block < 2; ++col_in_block ){
+                                auto adJacVal = adJac[row_block][col_block][row_in_block][col_in_block];
+                                auto numJacVal = adJac2[row_block][col_block][row_in_block][col_in_block];
+                                auto max = std::max(std::abs(adJacVal),std::abs(numJacVal));
+
+                                if (max > 0.0000001){
+                                    if ( ( std::abs( adJacVal - numJacVal) ) <= 0.00001 * max ){ // Count it as zero
+                                        diffJac2[row_block][col_block][row_in_block][col_in_block] = 0.0;
+                                    }
+                                    else{
+                                        diffJac2[row_block][col_block][row_in_block][col_in_block] = adJacVal - numJacVal;
+                                    }
+                                }
+                                else{ //Count it as zero
+                                    diffJac2[row_block][col_block][row_in_block][col_in_block] = 0.0;
+                                }
+
+                            }
+                        }
+                    }
+                }
+                Dune::printmatrix(std::cout, diffJac2, "Diff jac ad2", "row");
+
+
 
                 enum StateTypes {OIL_PRESSURE = 1, WATER_SATURATION = 0};
 
@@ -406,6 +453,7 @@ namespace Opm {
                         for (int i = 0; i < 2; ++i){                            // We are doing central difference
 
                             ReservoirState tmpResState = reservoir_state; // Copy
+                            WellState tmpWellState = well_state; //copy
                             dx = 0; // reset the perturbation vector
                             dx[cell_block][stateType] = (i==0) ? -pert_sizes[stateType]/2 : pert_sizes[stateType]/2; // The first iteration calculates the f(x - dx/2)
 
@@ -421,13 +469,18 @@ namespace Opm {
                             // Calculate the residual (and also the ad jacobian)
                             ebosSimulator_.model().linearizer().linearize();
 
-                            // Need to convert the jacobian to "flow format"
+                            // Need to convert the jacobian to "flow format". (Scaling by some factors)
                             auto& ebosJac = ebosSimulator_.model().linearizer().matrix();
                             auto& ebosResid = ebosSimulator_.model().linearizer().residual();
                             //Dune::printmatrix(std::cout, ebosJac, "J ebos", "row");
                             //auto asdf = ebosSimulator_.model().linearizer().residual();
                             //std::cout << asdf <<std::endl << std::endl;
                             convertResults(ebosResid, ebosJac);
+
+
+                            //Run the well equations too.
+                            double dt = timer.currentStepLength();
+                            wellModel().assemble(ebosSimulator_, iteration, dt, tmpWellState); // This will affect the residuals and the jacobian in ebosSimulator_
 
 
 
@@ -457,13 +510,13 @@ namespace Opm {
                     }
                 }
 
-                Dune::printmatrix(std::cout, numJac, "numerical", "row");
-                // Calculate the difference between adJac and numJac. If the difference is really small, set it to zero.
+                Dune::printmatrix(std::cout, numJac, "numerical of the 2nd", "row");
+                // Calculate the difference between adJac2 and numJac. If the difference is really small, set it to zero.
                 for(std::size_t row_block=0; row_block < 9; ++row_block ){
                     for(std::size_t col_block=0; col_block < 9; ++col_block ){
                         for(std::size_t row_in_block=0; row_in_block < 2; ++row_in_block ){
                             for(std::size_t col_in_block=0; col_in_block < 2; ++col_in_block ){
-                                auto adJacVal = adJac[row_block][col_block][row_in_block][col_in_block];
+                                auto adJacVal = adJac2[row_block][col_block][row_in_block][col_in_block];
                                 auto numJacVal = numJac[row_block][col_block][row_in_block][col_in_block];
                                 auto max = std::max(std::abs(adJacVal),std::abs(numJacVal));
 
@@ -485,14 +538,6 @@ namespace Opm {
                 }
 
                 Dune::printmatrix(std::cout, diffJac, "adJac - numerical", "row");
-
-
-
-            //updateState(dx,reservoir_state);
-            //wellModel().updateWellState(dxw, well_state);
-            //convertInput( iteration, reservoir_state, ebosSimulator_ );
-            //ebosSimulator_.model().invalidateIntensiveQuantitiesCache(/*timeIdx=*/0);
-
             }
 
 
@@ -565,6 +610,9 @@ namespace Opm {
 
                 file_residualsWE << std::endl << std::endl << std::endl;
                 file_residualsWE.close();
+                const auto& ebosJacConst = ebosSimulator_.model().linearizer().matrix();
+                auto& A2 = ebosSimulator_.model().linearizer().matrixA2();
+                A2 = ebosJacConst;
 
                 // apply well residual to the residual.
                 auto& ebosResid = ebosSimulator_.model().linearizer().residual();
