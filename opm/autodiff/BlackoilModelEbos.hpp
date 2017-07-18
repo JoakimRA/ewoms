@@ -323,17 +323,21 @@ namespace Opm {
             else{
 
 
+                const int nw = numWells();
+                BVector dw(nw);
 
 
                 const int nc = AutoDiffGrid::numCells(grid_);
                 BVector dx(nc);
                 dx = 0;
-                Scalar dx_value;
 
                 // copy the states.
                 ReservoirState orgResState = reservoir_state;
                 WellState orgWellState = well_state;
 
+                auto& duneB = wellModel().B();
+                auto& duneC = wellModel().C();
+                auto& duneD = wellModel().D();
 
                 auto& A = ebosSimulator_.model().linearizer().matrixA(); // The gt
                 auto& A2 = ebosSimulator_.model().linearizer().matrixA2(); // The gt
@@ -349,8 +353,132 @@ namespace Opm {
                 Dune::BCRSMatrix<M> diffJac(9,9, Dune::BCRSMatrix<M>::random);
                 Dune::BCRSMatrix<M> diffJac2(9,9, Dune::BCRSMatrix<M>::random);
 
+                typedef Dune::FieldMatrix<Scalar,2,3> dimBlockB;
+                Dune::BCRSMatrix<dimBlockB> B(9,2, Dune::BCRSMatrix<dimBlockB>::random);
+                Dune::BCRSMatrix<dimBlockB> numB(9,2, Dune::BCRSMatrix<dimBlockB>::random);
+                Dune::BCRSMatrix<dimBlockB> diffB(9,2, Dune::BCRSMatrix<dimBlockB>::random);
+                typedef Dune::FieldMatrix<Scalar,3,2> dimBlockC;
+                Dune::BCRSMatrix<dimBlockC> C(2,9, Dune::BCRSMatrix<dimBlockC>::random);
+                Dune::BCRSMatrix<dimBlockC> numC(2,9, Dune::BCRSMatrix<dimBlockC>::random);
+                Dune::BCRSMatrix<dimBlockC> diffC(2,9, Dune::BCRSMatrix<dimBlockC>::random);
+                typedef Dune::FieldMatrix<Scalar,3,3> dimBlockD;
+                Dune::BCRSMatrix<dimBlockD> D(2,2, Dune::BCRSMatrix<dimBlockD>::random);
+                Dune::BCRSMatrix<dimBlockD> numD(2,2, Dune::BCRSMatrix<dimBlockD>::random);
+                Dune::BCRSMatrix<dimBlockD> diffD(2,2, Dune::BCRSMatrix<dimBlockD>::random);
 
-                //Dune::printmatrix(std::cout, A, "title...", "row");
+
+                for(int row=0; row < B.N(); ++row){
+                    B.setrowsize(row, 2);
+                    numB.setrowsize(row, 2);
+                    diffB.setrowsize(row, 2);
+                }
+                B.endrowsizes();
+                numB.endrowsizes();
+                diffB.endrowsizes();
+
+                for(int row=0; row < numC.N(); ++row){
+                    C.setrowsize(row,9);
+                    numC.setrowsize(row, 9);
+                    diffC.setrowsize(row, 9);
+
+                }
+                C.endrowsizes();
+                numC.endrowsizes();
+                diffC.endrowsizes();
+
+                for(int row=0; row < D.N(); ++row){
+                    D.setrowsize(row, 2);
+                    numD.setrowsize(row, 2);
+                    diffD.setrowsize(row, 2);
+                }
+                D.endrowsizes();
+                numD.endrowsizes();
+                diffD.endrowsizes();
+
+                for (int row=0; row < B.N(); ++row){
+                    for (int col=0; col < B.M(); ++col){
+                        B.addindex(row, col);
+                        numB.addindex(row, col);
+                        diffB.addindex(row, col);
+                    }
+                }
+                B.endindices();
+                numB.endindices();
+                diffB.endindices();
+
+                for (int row=0; row < numC.N(); ++row){
+                    for (int col=0; col < numC.M(); ++col){
+                        C.addindex(row, col);
+                        numC.addindex(row, col);
+                        diffC.addindex(row, col);
+                    }
+                }
+                C.endindices();
+                numC.endindices();
+                diffC.endindices();
+
+
+
+                for (int row=0; row < D.N(); ++row){
+                    for (int col=0; col < D.M(); ++col){
+                        D.addindex(row, col);
+                        numD.addindex(row, col);
+                        diffD.addindex(row, col);
+                    }
+                }
+                D.endindices();
+                numD.endindices();
+                diffD.endindices();
+
+
+
+                // Copy the relevant elements from the AD jacobians made by the simulator.
+
+                for(std::size_t row_block=0; row_block < C.N(); ++row_block ){
+                    for(std::size_t col_block=0; col_block < C.M(); ++col_block ){
+                        if (duneC.exists(row_block, col_block)){
+                            C[row_block][col_block][0][0] = duneC[row_block][col_block][0][0];
+                            C[row_block][col_block][0][1] = duneC[row_block][col_block][0][1];
+                            C[row_block][col_block][1][0] = duneC[row_block][col_block][1][0];
+                            C[row_block][col_block][1][1] = duneC[row_block][col_block][1][1];
+                            C[row_block][col_block][2][0] = duneC[row_block][col_block][2][0];
+                            C[row_block][col_block][2][1] = duneC[row_block][col_block][2][1];
+                        }
+                    }
+                }
+
+                for(std::size_t row_block=0; row_block < D.N(); ++row_block ){
+                    for(std::size_t col_block=0; col_block < D.M(); ++col_block ){
+                        if (duneD.exists(row_block, col_block)){
+                            D[row_block][col_block][0][0] = duneD[row_block][col_block][0][0];
+                            D[row_block][col_block][0][1] = duneD[row_block][col_block][0][1];
+                            D[row_block][col_block][0][2] = duneD[row_block][col_block][0][2];
+                            D[row_block][col_block][1][0] = duneD[row_block][col_block][1][0];
+                            D[row_block][col_block][1][1] = duneD[row_block][col_block][1][1];
+                            D[row_block][col_block][1][2] = duneD[row_block][col_block][1][2];
+                            D[row_block][col_block][2][0] = duneD[row_block][col_block][2][0];
+                            D[row_block][col_block][2][1] = duneD[row_block][col_block][2][1];
+                            D[row_block][col_block][2][2] = duneD[row_block][col_block][2][2];
+                        }
+                    }
+                }
+
+
+                // duneB is transposed, B is not!
+                for(std::size_t row_block=0; row_block < B.N(); ++row_block ){
+                    for(std::size_t col_block=0; col_block < B.M(); ++col_block ){
+                        if (duneB.exists(col_block, row_block)){
+                            //B[row_block][col_block] = duneB[col_block][row_block].transpose();
+                            B[row_block][col_block][0][0] = duneB[col_block][row_block][0][0];
+                            B[row_block][col_block][0][1] = duneB[col_block][row_block][1][0];
+                            B[row_block][col_block][0][2] = duneB[col_block][row_block][2][0];
+                            B[row_block][col_block][1][0] = duneB[col_block][row_block][0][1];
+                            B[row_block][col_block][1][1] = duneB[col_block][row_block][1][1];
+                            B[row_block][col_block][1][2] = duneB[col_block][row_block][2][1];
+                        }
+                    }
+                }
+
 
                 // Specify the row sizes.
                 for (int row=0; row < 9; ++row){
@@ -403,53 +531,46 @@ namespace Opm {
 
                 // ------------  create and setup the matrices for the jacobians ----------------------- end
 
-                //Dune::printmatrix(std::cout, A, "AD ", "row");
-                //Dune::printmatrix(std::cout, adJac, "AD, no gas", "row");
-
-                //maa indekse: [i][j][a][b]
-
 
                 std::vector<Scalar> stateValues(2); // Should not be needed as the difference should be the perturbation size...
-                std::vector<GlobalEqVector> residualValues(2); // {f(x - dx/2), f(x + dx/2)}
+                std::vector<GlobalEqVector> residualsMB(2); // {f(x - dx/2), f(x + dx/2)}
+                //std::vector<GlobalEqVector> residualsWE(2); // {f(x - dx/2), f(x + dx/2)}
                 std::vector<Scalar> pert_sizes = {-0.000001, -10}; // Using a negative value is the same as applying a positive perturbation.
-                Dune::printmatrix(std::cout, adJac, "ad", "row");
-                Dune::printmatrix(std::cout, adJac2, "ad", "row");
 
-                // Calculate the difference between adJac and adJac2. If the difference is really small, set it to zero.
-                for(std::size_t row_block=0; row_block < 9; ++row_block ){
-                    for(std::size_t col_block=0; col_block < 9; ++col_block ){
-                        for(std::size_t row_in_block=0; row_in_block < 2; ++row_in_block ){
-                            for(std::size_t col_in_block=0; col_in_block < 2; ++col_in_block ){
-                                auto adJacVal = adJac[row_block][col_block][row_in_block][col_in_block];
-                                auto numJacVal = adJac2[row_block][col_block][row_in_block][col_in_block];
-                                auto max = std::max(std::abs(adJacVal),std::abs(numJacVal));
 
-                                if (max > 0.0000001){
-                                    if ( ( std::abs( adJacVal - numJacVal) ) <= 0.00001 * max ){ // Count it as zero
-                                        diffJac2[row_block][col_block][row_in_block][col_in_block] = 0.0;
-                                    }
-                                    else{
-                                        diffJac2[row_block][col_block][row_in_block][col_in_block] = adJacVal - numJacVal;
-                                    }
-                                }
-                                else{ //Count it as zero
-                                    diffJac2[row_block][col_block][row_in_block][col_in_block] = 0.0;
-                                }
 
-                            }
+                std::vector<std::vector<std::vector<Scalar>>> residualsWE;
+                // Initialization of residualsWE:
+                for (std::size_t i=0; i < 2; ++i){
+                    std::vector<std::vector<Scalar >> tmp1;
+                    for (std::size_t j=0; j < 2; ++j){
+                        std::vector<Scalar> tmp2;
+                        for (std::size_t k=0; k < 3; ++k){
+                            tmp2.push_back(0);
                         }
+                        tmp1.push_back(tmp2);
                     }
+                    residualsWE.push_back(tmp1);
                 }
-                Dune::printmatrix(std::cout, diffJac2, "Diff jac ad2", "row");
-
-
+                std::cout << 2 << "\t" << 2 << "\t" << 3 << std::endl;
+                std::cout << residualsWE.size() << "\t" << residualsWE[0].size() << "\t" << residualsWE[0][0].size() << std::endl;
 
                 enum StateTypes {OIL_PRESSURE = 1, WATER_SATURATION = 0};
 
                 for(std::size_t cell_block=0; cell_block<9; ++cell_block){      // For each grid block.
                     for(int stateType = 0; stateType<2; ++stateType){           // For each phase/state_variable in that grid block
-                        residualValues[0] = 0;
-                        residualValues[1] = 0;
+                        residualsMB[0] = 0; residualsMB[1] = 0;
+                        // resetting the well residual container:
+                        for (std::size_t i=0; i < residualsWE.size(); ++i){
+                            std::vector<std::vector<Scalar >> tmp1;
+                            for (std::size_t j=0; j < residualsWE[i].size(); ++j){
+                                std::vector<Scalar> tmp2;
+                                for (std::size_t k=0; k < residualsWE[i][j].size(); ++k){
+                                    residualsWE[i][j][k] = 0;
+                                }
+                            }
+                        }
+
                         for (int i = 0; i < 2; ++i){                            // We are doing central difference
 
                             ReservoirState tmpResState = reservoir_state; // Copy
@@ -459,12 +580,13 @@ namespace Opm {
 
                             // Apply the perturbation to the reservoir state variable
                             updateState(dx,tmpResState);
+                            //wellModel().updateWellState(xw, well_state);
 
                             // Send this information to ebos (and also convert it to ebos format)
                             convertInput( iteration, tmpResState, ebosSimulator_ );
 
                             // Delete the cache and recalculate. If we don't do this, there will be no update/change when calling linearize()
-                            ebosSimulator_.model().invalidateIntensiveQuantitiesCache(/*timeIdx=*/0);
+                            ebosSimulator_.model().invalidateIntensiveQuantitiesCache(0); //0 is timeidx
 
                             // Calculate the residual (and also the ad jacobian)
                             ebosSimulator_.model().linearizer().linearize();
@@ -472,9 +594,6 @@ namespace Opm {
                             // Need to convert the jacobian to "flow format". (Scaling by some factors)
                             auto& ebosJac = ebosSimulator_.model().linearizer().matrix();
                             auto& ebosResid = ebosSimulator_.model().linearizer().residual();
-                            //Dune::printmatrix(std::cout, ebosJac, "J ebos", "row");
-                            //auto asdf = ebosSimulator_.model().linearizer().residual();
-                            //std::cout << asdf <<std::endl << std::endl;
                             convertResults(ebosResid, ebosJac);
 
 
@@ -486,8 +605,18 @@ namespace Opm {
 
                             // Get a copy of the residuals
                             auto resMB_perturbed = ebosSimulator_.model().linearizer().residual();
-                            //std::cout << resMB_perturbed <<std::endl << std::endl;
-                            residualValues[i] = resMB_perturbed;
+                            auto resWE_perturbed_column = wellModel().residual(); // std::vector<double>
+
+                            int wellNr = 0;
+                            for (std::size_t j = 0; j < resWE_perturbed_column.size(); ++j){
+                                if (j%3 == 0 && j > 1){
+                                    wellNr++;
+                                }
+                                residualsWE[i][wellNr][j%3] = resWE_perturbed_column[j];
+
+                            }
+
+                            residualsMB[i] = resMB_perturbed;
 
                             if (stateType == OIL_PRESSURE){
                                 stateValues[i] = tmpResState.pressure()[cell_block]; // pressure of oil
@@ -501,48 +630,165 @@ namespace Opm {
                         for (std::size_t cell_block_res=0; cell_block_res < 9; ++cell_block_res){
                             for (std::size_t res_nr=0; res_nr < 2; ++res_nr){
                                 //numJac: (r_new - r_old) / (p_new - p_old)
-                                //std::cout << pert_sizes[stateType] << "\t" << -(stateValues[1] - stateValues[0]) << "\t" << stateValues[1] << "\t" <<  stateValues[0] << std::endl;
-
-                                //assert(static_cast<Scalar>(pert_sizes[stateType]) == static_cast<Scalar>(-(stateValues[1] - stateValues[0])) && "perturbation size not equal to the state difference... not good" );
-                                numJac[cell_block_res][cell_block][res_nr][stateType] = (residualValues[1][cell_block_res][res_nr] - residualValues[0][cell_block_res][res_nr])/((stateValues[1] - stateValues[0]));
+                                numJac[cell_block_res][cell_block][res_nr][stateType] = (residualsMB[1][cell_block_res][res_nr] - residualsMB[0][cell_block_res][res_nr])/((stateValues[1] - stateValues[0]));
+                            }
+                        }
+                        for (std::size_t cell_block_res=0; cell_block_res < 2; ++cell_block_res){
+                            for (std::size_t res_nr=0; res_nr < 2; ++res_nr){
+                                //numJac: (r_new - r_old) / (p_new - p_old)
+                                numC[cell_block_res][cell_block][res_nr][stateType] = (residualsWE[1][cell_block_res][res_nr] - residualsWE[0][cell_block_res][res_nr])/((stateValues[1] - stateValues[0]));
                             }
                         }
                     }
                 }
 
-                Dune::printmatrix(std::cout, numJac, "numerical of the 2nd", "row");
-                // Calculate the difference between adJac2 and numJac. If the difference is really small, set it to zero.
-                for(std::size_t row_block=0; row_block < 9; ++row_block ){
-                    for(std::size_t col_block=0; col_block < 9; ++col_block ){
-                        for(std::size_t row_in_block=0; row_in_block < 2; ++row_in_block ){
-                            for(std::size_t col_in_block=0; col_in_block < 2; ++col_in_block ){
-                                auto adJacVal = adJac2[row_block][col_block][row_in_block][col_in_block];
-                                auto numJacVal = numJac[row_block][col_block][row_in_block][col_in_block];
-                                auto max = std::max(std::abs(adJacVal),std::abs(numJacVal));
 
-                                if (max > 0.0000001){
-                                    if ( ( std::abs( adJacVal - numJacVal) ) <= 0.00001 * max ){ // Count it as zero
-                                        diffJac[row_block][col_block][row_in_block][col_in_block] = 0.0;
-                                    }
-                                    else{
-                                        diffJac[row_block][col_block][row_in_block][col_in_block] = adJacVal - numJacVal;
-                                    }
-                                }
-                                else{ //Count it as zero
-                                    diffJac[row_block][col_block][row_in_block][col_in_block] = 0.0;
-                                }
+                calculateDifference(adJac2, numJac, diffJac);
+                Dune::printmatrix(std::cout, diffJac, "A  difference", "row");
 
+                calculateDifference(C, numC, diffC);
+                Dune::printmatrix(std::cout, diffC, "C  difference", "row");
+
+
+
+
+                std::vector<Scalar> pert_sizes2 = {-0.000001, -0.000001, -10}; // Using a negative value is the same as applying a positive perturbation.
+                enum StateTypes {FLOW_WATER = 0, FLOW_OIL = 0, BHP};
+
+                for(std::size_t well=0; well<2; ++well){      // For each well.
+                    for(int stateType = 0; stateType<3; ++stateType){           // For each phase/state_variable/component in that grid block
+                        residualsMB[0] = 0; residualsMB[1] = 0;   // reset
+                        // resetting the well residual container:
+                        for (std::size_t i=0; i < residualsWE.size(); ++i){
+                            std::vector<std::vector<Scalar >> tmp1;
+                            for (std::size_t j=0; j < residualsWE[i].size(); ++j){
+                                std::vector<Scalar> tmp2;
+                                for (std::size_t k=0; k < residualsWE[i][j].size(); ++k){
+                                    residualsWE[i][j][k] = 0;
+                                }
+                            }
+                        }
+
+                        for (int i = 0; i < 2; ++i){                            // We are doing central difference
+
+                            ReservoirState tmpResState = reservoir_state; // Copy
+                            WellState tmpWellState = well_state; //copy
+                            dw = 0; // reset the perturbation vector
+                            dw[well][stateType] = (i==0) ? -pert_sizes2[stateType]/2 : pert_sizes2[stateType]/2; // The first iteration calculates the f(x - dx/2)
+
+                            // Apply the perturbation to the reservoir state variable
+                            //updateState(dx,tmpResState);
+                            wellModel().updateWellState(dw, well_state);
+
+                            // Send this information to ebos (and also convert it to ebos format)
+                            convertInput( iteration, tmpResState, ebosSimulator_ );
+
+                            // Delete the cache and recalculate. If we don't do this, there will be no update/change when calling linearize()
+                            ebosSimulator_.model().invalidateIntensiveQuantitiesCache(0); //0 is the timeidx
+
+                            // Calculate the residual (and also the ad jacobian)
+                            ebosSimulator_.model().linearizer().linearize();
+
+                            // Need to convert the jacobian to "flow format". (Scaling by some factors)
+                            auto& ebosJac = ebosSimulator_.model().linearizer().matrix();
+                            auto& ebosResid = ebosSimulator_.model().linearizer().residual();
+                            convertResults(ebosResid, ebosJac);
+
+
+                            //Run the well equations too.
+                            double dt = timer.currentStepLength();
+                            wellModel().assemble(ebosSimulator_, iteration, dt, tmpWellState); // This will affect the residuals and the jacobian in ebosSimulator_
+
+
+
+                            // Get a copy of the residuals
+                            auto resMB_perturbed = ebosSimulator_.model().linearizer().residual();
+                            auto resWE_perturbed_column = wellModel().residual(); // std::vector<double>
+
+                            int wellNr = 0;
+                            for (std::size_t j = 0; j < resWE_perturbed_column.size(); ++j){
+                                if (j%3 == 0 && j > 1){
+                                    wellNr++;
+                                }
+                                residualsWE[i][wellNr][j%3] = resWE_perturbed_column[j];
+
+                            }
+                            residualsMB[i] = resMB_perturbed;
+
+                            // Calculate the numerical difference
+                            for (std::size_t cell_block_res=0; cell_block_res < 9; ++cell_block_res){
+                                for (std::size_t res_nr=0; res_nr < 2; ++res_nr){
+                                    //numJac: (r_new - r_old) / (p_new - p_old)
+                                    numB[cell_block_res][well][res_nr][stateType] = (residualsMB[1][cell_block_res][res_nr] - residualsMB[0][cell_block_res][res_nr])/(-pert_sizes2[stateType]*2);
+                                }
+                            }
+                            for (std::size_t cell_block_res=0; cell_block_res < 2; ++cell_block_res){
+                                for (std::size_t res_nr=0; res_nr < 2; ++res_nr){
+                                    //numJac: (r_new - r_old) / (p_new - p_old)
+                                    numD[cell_block_res][well][res_nr][stateType] = (residualsWE[1][cell_block_res][res_nr] - residualsWE[0][cell_block_res][res_nr])/(-pert_sizes2[stateType]*2);
+                                }
                             }
                         }
                     }
                 }
 
-                Dune::printmatrix(std::cout, diffJac, "adJac - numerical", "row");
+
+                calculateDifference(B, numB, diffB);
+                Dune::printmatrix(std::cout, diffB, "B  difference", "row");
+
+
+
+
+
+                calculateDifference(D, numD, diffD);
+                Dune::printmatrix(std::cout, diffD, "D  difference", "row");
             }
 
-
-            return report;
+                return report;
         }
+
+
+        template<typename T>
+        void calculateDifference(T mat1, T mat0, T matDiff){
+            std::cout << mat1[0][0][0][0] << std::endl;
+            for(std::size_t row_block=0; row_block < mat1.N(); ++row_block ){
+                for(std::size_t col_block=0; col_block < mat1.M(); ++col_block ){
+                    for(std::size_t row_in_block=0; row_in_block < mat1[row_block][col_block].N(); ++row_in_block ){
+                        for(std::size_t col_in_block=0; col_in_block < mat1[row_block][col_block].M(); ++col_in_block ){
+
+                            Scalar val1 = (mat1[row_block][col_block][row_in_block][col_in_block]);
+                            Scalar val0 = (mat0[row_block][col_block][row_in_block][col_in_block]);
+                            auto max = std::max(std::abs(val1),std::abs(val0));
+
+                            if (max > 0.0000001){
+                                if ( ( std::abs( val1 - val0) ) <= 0.00001 * max ){ // Count it as zero
+                                    matDiff[row_block][col_block][row_in_block][col_in_block] = 0.0;
+                                }
+                                else{
+                                    matDiff[row_block][col_block][row_in_block][col_in_block] = val1 - val0;
+                                }
+                            }
+                            else{ //Count it as zero
+                                matDiff[row_block][col_block][row_in_block][col_in_block] = 0.0;
+                            }
+
+                        }
+                    }
+                }
+            }
+
+        }
+
+        /*
+        void calculateNumericalDifferentiation(BVector& residual0, BVector& residual1, Scalar perturbationSize ,Mat& resultMatrix, int stateType) const{
+            for (std::size_t cell_block_res=0; cell_block_res < 9; ++cell_block_res){
+                for (std::size_t res_nr=0; res_nr < 2; ++res_nr){
+                    // (r_new - r_old) / (p_new - p_old)
+                    resultMatrix[][][]
+                    numJac[cell_block_res][cell_block][res_nr][stateType] = (residualsMB[1][cell_block_res][res_nr] - residualsMB[0][cell_block_res][res_nr])/((stateValues[1] - stateValues[0]));
+                }
+            }
+        }*/
 
         void printIf(int c, double x, double y, double eps, std::string type) {
             if (std::abs(x-y) > eps) {
@@ -613,6 +859,8 @@ namespace Opm {
                 const auto& ebosJacConst = ebosSimulator_.model().linearizer().matrix();
                 auto& A2 = ebosSimulator_.model().linearizer().matrixA2();
                 A2 = ebosJacConst;
+
+
 
                 // apply well residual to the residual.
                 auto& ebosResid = ebosSimulator_.model().linearizer().residual();
