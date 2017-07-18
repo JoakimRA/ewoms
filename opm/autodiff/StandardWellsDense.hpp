@@ -141,6 +141,13 @@ enum WellVariablePositions {
                 return numComp;
             }
 
+            //double getQValue(const int wellIdx, const int compIdx) const;
+            //double getBHPValue(const int wellIdx) const;
+
+            EvalWell getBhp2(const int wellIdx) const;
+
+            EvalWell getQ2(const int wellIdx, const int compIdx) const;
+
 
             SimulatorReport assemble(Simulator& ebosSimulator,
                                      const int iterationIdx,

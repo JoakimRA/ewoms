@@ -297,6 +297,25 @@ namespace Opm {
         }
 
 
+        //const auto& invDune = invD();
+        //duneD = invDune;
+
+
+        for(std::size_t row_block=0; row_block < duneD_.N(); ++row_block ){
+            for(std::size_t col_block=0; col_block < duneD_.M(); ++col_block ){
+                if (invDuneD_.exists(row_block, col_block)){
+                    duneD_[row_block][col_block][0][0] = invDuneD_[row_block][col_block][0][0];
+                    duneD_[row_block][col_block][0][1] = invDuneD_[row_block][col_block][0][1];
+                    duneD_[row_block][col_block][0][2] = invDuneD_[row_block][col_block][0][2];
+                    duneD_[row_block][col_block][1][0] = invDuneD_[row_block][col_block][1][0];
+                    duneD_[row_block][col_block][1][1] = invDuneD_[row_block][col_block][1][1];
+                    duneD_[row_block][col_block][1][2] = invDuneD_[row_block][col_block][1][2];
+                    duneD_[row_block][col_block][2][0] = invDuneD_[row_block][col_block][2][0];
+                    duneD_[row_block][col_block][2][1] = invDuneD_[row_block][col_block][2][1];
+                    duneD_[row_block][col_block][2][2] = invDuneD_[row_block][col_block][2][2];
+                }
+            }
+        }
 
         // do the local inversion of D.
         localInvert( invDuneD_ );
@@ -2155,7 +2174,13 @@ namespace Opm {
     }
 
 
+    template<typename TypeTag>
+    typename StandardWellsDense<TypeTag>::EvalWell
+    StandardWellsDense<TypeTag>::
+    getBhp2(const int wellIdx) const {
+        return getBhp(wellIdx);
 
+    }
 
 
     template<typename TypeTag>
@@ -2210,9 +2235,36 @@ namespace Opm {
         return wellVariables_[nw*XvarWell + wellIdx];
     }
 
+/*
 
+    template<typename TypeTag>
+    double
+    StandardWellsDense<TypeTag>::
+    getQValue(const int wellIdx, const int compIdx) const
+    {
+        EvalWell q = getQs(wellIdx,compIdx);
+        return q.value();
 
+    }
 
+    template<typename TypeTag>
+    double
+    StandardWellsDense<TypeTag>::
+    getBHPValue(const int wellIdx) const
+    {
+        EvalWell bhp = getBHP(wellIdx);
+        return bhp.value();
+
+    }
+*/
+
+    template<typename TypeTag>
+    typename StandardWellsDense<TypeTag>::EvalWell
+    StandardWellsDense<TypeTag>::
+    getQ2(const int wellIdx, const int compIdx) const
+    {
+        return getQs(wellIdx, compIdx);
+    }
 
     template<typename TypeTag>
     typename StandardWellsDense<TypeTag>::EvalWell
@@ -3281,67 +3333,67 @@ namespace Opm {
     }
 
     template<typename TypeTag>
-    const Mat&
+    const typename StandardWellsDense<TypeTag>::Mat &
     StandardWellsDense<TypeTag>::
     B() const
     {
-        return *duneB_;
+        return duneB_;
     }
 
     template<typename TypeTag>
-    Mat&
+    typename StandardWellsDense<TypeTag>::Mat &
     StandardWellsDense<TypeTag>::
     B()
     {
-        return *duneB_;
+        return duneB_;
     }
 
     template<typename TypeTag>
-    const Mat&
+    const typename StandardWellsDense<TypeTag>::Mat &
     StandardWellsDense<TypeTag>::
     C() const
     {
-        return *duneC_;
+        return duneC_;
     }
 
     template<typename TypeTag>
-    Mat&
+    typename StandardWellsDense<TypeTag>::Mat &
     StandardWellsDense<TypeTag>::
     C()
     {
-        return *duneC_;
+        return duneC_;
     }
 
     template<typename TypeTag>
-    const Mat&
+    const typename StandardWellsDense<TypeTag>::Mat &
     StandardWellsDense<TypeTag>::
     D() const
     {
-        return *duneD_;
+        return duneD_;
     }
 
     template<typename TypeTag>
-    Mat&
+    typename StandardWellsDense<TypeTag>::Mat &
     StandardWellsDense<TypeTag>::
     D()
     {
-        return *duneD_;
+        return duneD_;
     }
 
     template<typename TypeTag>
-    const Mat&
+    const typename StandardWellsDense<TypeTag>::Mat &
     StandardWellsDense<TypeTag>::
     invD() const
     {
-        return *invDuneD_;
+        return invDuneD_;
     }
 
     template<typename TypeTag>
-    Mat&
+    typename StandardWellsDense<TypeTag>::Mat &
     StandardWellsDense<TypeTag>::
     invD()
     {
-        return *invDuneD_;
+        return invDuneD_;
     }
 
 
