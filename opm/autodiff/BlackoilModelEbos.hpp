@@ -1,4 +1,4 @@
-/*
+﻿/*
   Copyright 2013, 2015 SINTEF ICT, Applied Mathematics.
   Copyright 2014, 2015 Dr. Blatt - HPC-Simulation-Software & Services
   Copyright 2014, 2015 Statoil ASA.
@@ -430,7 +430,7 @@ namespace Opm {
                 numD.endindices();
                 diffD.endindices();
 
-
+                Dune::printmatrix(std::cout, duneC, "AD duneC", "row");
 
                 // Copy the relevant elements from the AD jacobians made by the simulator.
 
@@ -535,7 +535,9 @@ namespace Opm {
                 std::vector<Scalar> stateValues(2); // Should not be needed as the difference should be the perturbation size...
                 std::vector<GlobalEqVector> residualsMB(2); // {f(x - dx/2), f(x + dx/2)}
                 //std::vector<GlobalEqVector> residualsWE(2); // {f(x - dx/2), f(x + dx/2)}
+                //std::vector<Scalar> pert_sizes = {-0.000001, -10}; // Using a negative value is the same as applying a positive perturbation.
                 std::vector<Scalar> pert_sizes = {-0.000001, -10}; // Using a negative value is the same as applying a positive perturbation.
+
 
 
 
@@ -596,17 +598,18 @@ namespace Opm {
                             auto& ebosResid = ebosSimulator_.model().linearizer().residual();
                             convertResults(ebosResid, ebosJac);
 
-
                             //Run the well equations too.
                             double dt = timer.currentStepLength();
                             wellModel().assemble(ebosSimulator_, iteration, dt, tmpWellState); // This will affect the residuals and the jacobian in ebosSimulator_
-
 
 
                             // Get a copy of the residuals
                             auto resMB_perturbed = ebosSimulator_.model().linearizer().residual();
                             auto resWE_perturbed_column = wellModel().residual(); // std::vector<double>
 
+
+                            std::cout << resWE_perturbed_column.size() << std::endl;
+/*
                             int wellNr = 0;
                             for (std::size_t j = 0; j < resWE_perturbed_column.size(); ++j){
                                 if (j%3 == 0 && j > 1){
@@ -614,7 +617,16 @@ namespace Opm {
                                 }
                                 residualsWE[i][wellNr][j%3] = resWE_perturbed_column[j];
 
-                            }
+                            } */
+                            residualsWE[i][0][0] = resWE_perturbed_column[0];
+                            residualsWE[i][1][0] = resWE_perturbed_column[1];
+                            residualsWE[i][0][1] = resWE_perturbed_column[2];
+                            residualsWE[i][1][1] = resWE_perturbed_column[3];
+                            residualsMB[i] = resMB_perturbed;
+
+                            //for (int j=0; j<2;++j){
+                            //    std::cout << residualsWE[i]
+                            //}
 
                             residualsMB[i] = resMB_perturbed;
 
@@ -634,29 +646,31 @@ namespace Opm {
                             }
                         }
                         for (std::size_t cell_block_res=0; cell_block_res < 2; ++cell_block_res){
-                            for (std::size_t res_nr=0; res_nr < 2; ++res_nr){
+                            for (std::size_t res_nr=0; res_nr < 3; ++res_nr){
                                 //numJac: (r_new - r_old) / (p_new - p_old)
                                 numC[cell_block_res][cell_block][res_nr][stateType] = (residualsWE[1][cell_block_res][res_nr] - residualsWE[0][cell_block_res][res_nr])/((stateValues[1] - stateValues[0]));
                             }
                         }
                     }
                 }
-
-
-                calculateDifference(adJac2, numJac, diffJac);
+                Dune::printmatrix(std::cout, adJac2, "AD A", "row");
+                Dune::printmatrix(std::cout, numJac, "numerical A", "row");
+                calculateDifference(adJac2, numJac, &diffJac);
                 Dune::printmatrix(std::cout, diffJac, "A  difference", "row");
 
-                calculateDifference(C, numC, diffC);
+                Dune::printmatrix(std::cout, C, "AD C", "row");
+                Dune::printmatrix(std::cout, numC, "numerical C", "row");
+                calculateDifference(C, numC, &diffC);
                 Dune::printmatrix(std::cout, diffC, "C  difference", "row");
 
 
 
 
-                std::vector<Scalar> pert_sizes2 = {-0.000001, -0.000001, -10}; // Using a negative value is the same as applying a positive perturbation.
-                enum StateTypes {FLOW_WATER = 0, FLOW_OIL = 0, BHP};
+                //std::vector<Scalar> pert_sizes2 = {-0.000001, -0.000001, -10}; // Using a negative value is the same as applying a positive perturbation.
+                std::vector<Scalar> pert_sizes2 = {-0.01, -0.01, -10000};
 
                 for(std::size_t well=0; well<2; ++well){      // For each well.
-                    for(int stateType = 0; stateType<3; ++stateType){           // For each phase/state_variable/component in that grid block
+                    for(int stateType = 0; stateType<3; ++stateType){           // For each phase/state_variable/component in that well
                         residualsMB[0] = 0; residualsMB[1] = 0;   // reset
                         // resetting the well residual container:
                         for (std::size_t i=0; i < residualsWE.size(); ++i){
@@ -705,15 +719,26 @@ namespace Opm {
                             auto resMB_perturbed = ebosSimulator_.model().linearizer().residual();
                             auto resWE_perturbed_column = wellModel().residual(); // std::vector<double>
 
-                            int wellNr = 0;
-                            for (std::size_t j = 0; j < resWE_perturbed_column.size(); ++j){
-                                if (j%3 == 0 && j > 1){
-                                    wellNr++;
-                                }
-                                residualsWE[i][wellNr][j%3] = resWE_perturbed_column[j];
-
+                            std::cout << " Start " << std::endl;
+                            for (int j=0; j < resWE_perturbed_column.size(); ++j){
+                                std::cout << resWE_perturbed_column[j] << std::endl;
                             }
+                            std::cout << " Done " << std::endl;
+
+                            //int wellNr = 0;
+                            //for (std::size_t j = 0; j < resWE_perturbed_column.size(); ++j){
+                            //    if (j%3 == 0 && j > 1){
+                            //        wellNr++;
+                            //    }
+                            //    residualsWE[i][wellNr][j%3] = resWE_perturbed_column[j];
+
+                            //}
+                            residualsWE[i][0][1] = resWE_perturbed_column[0];
+                            residualsWE[i][1][1] = resWE_perturbed_column[1];
+                            residualsWE[i][0][1] = resWE_perturbed_column[2];
+                            residualsWE[i][1][1] = resWE_perturbed_column[3];
                             residualsMB[i] = resMB_perturbed;
+
 
                             // Calculate the numerical difference
                             for (std::size_t cell_block_res=0; cell_block_res < 9; ++cell_block_res){
@@ -733,15 +758,15 @@ namespace Opm {
                 }
 
 
-                calculateDifference(B, numB, diffB);
-                Dune::printmatrix(std::cout, diffB, "B  difference", "row");
+                //calculateDifference(B, numB, diffB);
+                //Dune::printmatrix(std::cout, diffB, "B  difference", "row");
 
 
 
 
 
-                calculateDifference(D, numD, diffD);
-                Dune::printmatrix(std::cout, diffD, "D  difference", "row");
+                //calculateDifference(D, numD, diffD);
+                //Dune::printmatrix(std::cout, diffD, "D  difference", "row");
             }
 
                 return report;
@@ -749,8 +774,7 @@ namespace Opm {
 
 
         template<typename T>
-        void calculateDifference(T mat1, T mat0, T matDiff){
-            std::cout << mat1[0][0][0][0] << std::endl;
+        void calculateDifference(T mat1, T mat0, T* matDiff){
             for(std::size_t row_block=0; row_block < mat1.N(); ++row_block ){
                 for(std::size_t col_block=0; col_block < mat1.M(); ++col_block ){
                     for(std::size_t row_in_block=0; row_in_block < mat1[row_block][col_block].N(); ++row_in_block ){
@@ -762,15 +786,16 @@ namespace Opm {
 
                             if (max > 0.0000001){
                                 if ( ( std::abs( val1 - val0) ) <= 0.00001 * max ){ // Count it as zero
-                                    matDiff[row_block][col_block][row_in_block][col_in_block] = 0.0;
+                                    matDiff[0][row_block][col_block][row_in_block][col_in_block] = 0.0;
                                 }
                                 else{
-                                    matDiff[row_block][col_block][row_in_block][col_in_block] = val1 - val0;
+                                    matDiff[0][row_block][col_block][row_in_block][col_in_block] = val1 - val0;
                                 }
                             }
                             else{ //Count it as zero
-                                matDiff[row_block][col_block][row_in_block][col_in_block] = 0.0;
+                                matDiff[0][row_block][col_block][row_in_block][col_in_block] = 0.0;
                             }
+
 
                         }
                     }
