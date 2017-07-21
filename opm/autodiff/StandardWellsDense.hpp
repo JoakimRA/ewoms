@@ -237,6 +237,8 @@ enum WellVariablePositions {
             void printIf(const int c, const double x, const double y, const double eps, const std::string type) const;
 
             std::vector<double> residual() const;
+            BVector residual2() const;
+
 
             bool getWellConvergence(Simulator& ebosSimulator,
                                     const int iteration) const;

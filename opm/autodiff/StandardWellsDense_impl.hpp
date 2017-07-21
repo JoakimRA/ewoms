@@ -768,6 +768,13 @@ namespace Opm {
     }
 
 
+    template<typename TypeTag>
+    typename StandardWellsDense<TypeTag>::BVector
+    StandardWellsDense<TypeTag>::
+    residual2() const {
+
+        return resWell_;
+    }
 
 
 
