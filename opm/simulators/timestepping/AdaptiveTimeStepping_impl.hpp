@@ -1,4 +1,4 @@
-/*
+﻿/*
   Copyright 2014 IRIS AS
 
   This file is part of the Open Porous Media project (OPM).
@@ -234,8 +234,127 @@ namespace Opm {
             SimulatorReport substepReport;
             std::string cause_of_failure = "";
             try {
+                typedef double Scalar;
+                typedef Dune::FieldVector<Scalar, 3>            VectorBlockType;
+                typedef Dune::BlockVector<VectorBlockType>      BVector;
+
+                typedef Dune::FieldMatrix<Scalar,2,2> dimBlockA0;
+                Dune::BCRSMatrix<dimBlockA0> A0(9,9, Dune::BCRSMatrix<dimBlockA0>::random);
+                Dune::BCRSMatrix<dimBlockA0> numA0(9,9, Dune::BCRSMatrix<dimBlockA0>::random);
+                Dune::BCRSMatrix<dimBlockA0> diffA0(9,9, Dune::BCRSMatrix<dimBlockA0>::random);
+                solver.model().denseInitializationOfBCRSMatrix(A0);
+                solver.model().denseInitializationOfBCRSMatrix(numA0);
+                solver.model().denseInitializationOfBCRSMatrix(diffA0);
+
+
+                auto& ebosSimulator = solver.model().ebosSimulator2();
+
+                State initial_reservoir_state = state;
+                WState initial_well_state = well_state;
                 substepReport = solver.step( substepTimer, state, well_state);
                 report += substepReport;
+                State final_reservoir_state = state;
+                WState final_well_state = well_state;
+
+
+
+
+                // -----------------------------------------------------------------------------------------------
+                // -----------------------------------------------------------------------------------------------
+                // -------------------------------- AD jacobian w.r.t. initial state -----------------------------
+                // -----------------------------------------------------------------------------------------------
+                // -----------------------------------------------------------------------------------------------
+
+
+
+
+
+                // -----------------------------------------------------------------------------------------------
+                // -----------------------------------------------------------------------------------------------
+                // ------------------------------- Numerical jacobian w.r.t. initial state -----------------------
+                // -----------------------------------------------------------------------------------------------
+                // -----------------------------------------------------------------------------------------------
+
+
+
+
+                // We only need to create the 'A' matrix.
+                //  1. Perturb the initial solution by dx/2.
+                //  2. Run the substep
+                //  3. Store residuals.
+
+
+                std::vector<std::vector<Dune::FieldVector<Scalar, 3>>> residualsMB;
+                // Initialization of residualsMB:
+                for (std::size_t i=0; i < 2; ++i){
+                    std::vector<Dune::FieldVector<Scalar, 3>> tmp1;
+                    for (std::size_t j=0; j < 9; ++j){
+                        Dune::FieldVector<Scalar, 3> tmp2;
+                        tmp1.push_back(tmp2);
+                    }
+                    residualsMB.push_back(tmp1);
+                }
+
+
+                BVector dx0(9);
+                dx0 = 0;
+                std::vector<Scalar> pert_sizes0 = {-0.000001, -10}; // Using a negative value is the same as applying a positive perturbation.
+
+                for(std::size_t cell_block=0; cell_block<9; ++cell_block){      // For each grid block.
+                    for(int stateType = 1; stateType<2; ++stateType){           // For each phase/state_variable in that grid block
+                        // Resetting the residual container.
+                        for (std::size_t i=0; i < residualsMB.size(); ++i){
+                            for (std::size_t j=0; j < residualsMB[i].size(); ++j){
+                                for (std::size_t k=0; k < residualsMB[i][j].size(); ++k){
+                                    residualsMB[i][j][k] = 0;
+                                }
+                            }
+                        }
+
+                        for (int i = 0; i < 2; ++i){                        // We are doing central difference
+                            State tmpInitialResState = initial_reservoir_state;    // Copy
+                            State tmpFinalResState = final_reservoir_state;
+                            WState tmpFinalWellState = initial_well_state;       // Copy
+
+                            dx0 = 0; // Reset the perturbation vector
+                            dx0[cell_block][stateType] = (i==0) ? -pert_sizes0[stateType]/2 : pert_sizes0[stateType]/2; // The first iteration calculates the f(x - dx/2)
+
+                            // Apply the perturbation to the reservoir state variable
+                            solver.model().updateState(dx0,tmpInitialResState);
+                            //std::vector<double>& pressures = tmpInitialResState.pressure();
+                            //pressures[cell_block] += (i==0) ? -pert_sizes0[stateType]/2 : pert_sizes0[stateType]/2;
+
+                            // Run the substep
+                            solver.runOneLinearization( substepTimer, tmpInitialResState, tmpFinalResState, tmpFinalWellState);
+
+                            // Get a deep copy of the residuals
+                            const auto resMB_perturbed = ebosSimulator.model().linearizer().residual();
+
+                            for (int grid_block = 0; grid_block < 9; ++grid_block){
+                                for(int res_nr = 0; res_nr < 3; ++res_nr){
+                                    residualsMB[i][grid_block][res_nr] = resMB_perturbed[grid_block][res_nr];
+                                }
+                            }
+                        }
+
+                        // Calculate the numerical difference
+                        for (std::size_t cell_block_res=0; cell_block_res < 9; ++cell_block_res){
+                            for (std::size_t res_nr=0; res_nr < 2; ++res_nr){
+                                // (f(x+dx/2) - f(x-dx/2)) / (dx)
+                                numA0[cell_block_res][cell_block][res_nr][stateType] = (residualsMB[1][cell_block_res][res_nr] - residualsMB[0][cell_block_res][res_nr])/((-pert_sizes0[stateType]));
+                            }
+                        }
+                    }
+                }
+
+
+                //Dune::printmatrix(std::cout, A0, "AD A0", "row");
+                Dune::printmatrix(std::cout, numA0, "numerical A0", "row");
+                //solver.model().calculateDifference(A0, numA0, &diffA0);
+                //Dune::printmatrix(std::cout, diffA0, "A0  difference", "row");
+
+
+
 
                 if( solver_verbose_ ) {
                     // report number of linear iterations

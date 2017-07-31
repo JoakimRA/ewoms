@@ -497,8 +497,8 @@ namespace Opm {
 
         assert( invDrw_.size() == invDuneD_.N() );
 
-        invDuneD_.mv(resWell_,invDrw_);
-        duneB_.mmtv(invDrw_, r);
+        invDuneD_.mv(resWell_,invDrw_); // invDrw_ = invDuneD_ * resWell_
+        duneB_.mmtv(invDrw_, r); // r = - duneB_^T * invDrw_
     }
 
 
@@ -1050,9 +1050,27 @@ namespace Opm {
         }
     }
 
+    /*
+    template<typename TypeTag>
+    void
+    StandardWellsDense<TypeTag>::
+    printWellState(std::ostream & s, const WellState & wellState) const
+    {
 
+        for (int wellIdx=0; wellIdx < 2; ++wellIdx){
+            s << "Well nr: " << wellIdx+1 << std::endl;
+            for (int compIdx=0; compIdx < 3 ;compIdx++){
+                auto q = wellState.getQs(wellIdx,compIdx);
+                auto q
+            }
+            s << std::endl;
+        }
+        s << " Q1 " << std::endl;
 
+    }
+    */
 
+// (const int wellIdx, const int compIdx)
 
     template<typename TypeTag>
     std::vector<double>

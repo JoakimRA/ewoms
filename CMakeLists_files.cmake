@@ -108,44 +108,44 @@ list (APPEND TEST_DATA_FILES
 # originally generated with the command:
 # find tutorials examples -name '*.c*' -printf '\t%p\n' | sort
 list (APPEND EXAMPLE_SOURCE_FILES
-  examples/find_zero.cpp
-  examples/flow_legacy.cpp
-  examples/flow_reorder.cpp
-  examples/flow_sequential.cpp
+  #examples/find_zero.cpp
+  #examples/flow_legacy.cpp
+  #examples/flow_reorder.cpp
+  #examples/flow_sequential.cpp
   examples/flow_ebos.cpp
-  examples/flow_ebos_2p.cpp
-  examples/flow_ebos_solvent.cpp
-  examples/flow_ebos_polymer.cpp
-  examples/flow_multisegment.cpp
-  examples/flow_solvent.cpp
-  examples/sim_2p_incomp.cpp
-  examples/sim_2p_incomp_ad.cpp
-  examples/sim_2p_comp_reorder.cpp
-  examples/sim_simple.cpp
-  examples/opm_init_check.cpp
-  examples/sim_poly2p_comp_reorder.cpp
-  examples/sim_poly2p_incomp_reorder.cpp
-  examples/flow_polymer.cpp
-  examples/wells_example.cpp
+ # examples/flow_ebos_2p.cpp
+ # examples/flow_ebos_solvent.cpp
+ # examples/flow_ebos_polymer.cpp
+ # examples/flow_multisegment.cpp
+ # examples/flow_solvent.cpp
+ # examples/sim_2p_incomp.cpp
+ # examples/sim_2p_incomp_ad.cpp
+ # examples/sim_2p_comp_reorder.cpp
+ # examples/sim_simple.cpp
+ # examples/opm_init_check.cpp
+ # examples/sim_poly2p_comp_reorder.cpp
+ # examples/sim_poly2p_incomp_reorder.cpp
+ # examples/flow_polymer.cpp
+ # examples/wells_example.cpp
   )
 
 # programs listed here will not only be compiled, but also marked for
 # installation
 list (APPEND PROGRAM_SOURCE_FILES
-  examples/sim_2p_incomp.cpp
-  examples/sim_2p_incomp_ad.cpp
-  examples/sim_2p_comp_reorder.cpp
+  #examples/sim_2p_incomp.cpp
+  #examples/sim_2p_incomp_ad.cpp
+  #examples/sim_2p_comp_reorder.cpp
   examples/flow_ebos.cpp
-  examples/flow_ebos_solvent.cpp
-  examples/flow_ebos_polymer.cpp
-  examples/flow_legacy.cpp
-  examples/flow_reorder.cpp
-  examples/flow_sequential.cpp
-  examples/flow_solvent.cpp
-  examples/opm_init_check.cpp
-  examples/sim_poly2p_comp_reorder.cpp
-  examples/sim_poly2p_incomp_reorder.cpp
-  examples/flow_polymer.cpp
+ # examples/flow_ebos_solvent.cpp
+ # examples/flow_ebos_polymer.cpp
+ # examples/flow_legacy.cpp
+ # examples/flow_reorder.cpp
+ # examples/flow_sequential.cpp
+ # examples/flow_solvent.cpp
+ # examples/opm_init_check.cpp
+ # examples/sim_poly2p_comp_reorder.cpp
+ # examples/sim_poly2p_incomp_reorder.cpp
+ # examples/flow_polymer.cpp
   )
 
 # originally generated with the command:

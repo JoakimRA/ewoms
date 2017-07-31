@@ -99,6 +99,13 @@ namespace Opm {
              ReservoirState& reservoir_state,
              WellState& well_state);
 
+        SimulatorReport
+        runOneLinearization(const SimulatorTimerInterface& timer,
+             ReservoirState& initial_reservoir_state,
+             ReservoirState& final_reservoir_state,
+             WellState& final_well_state);
+
+
         /// return the statistics if the step() method failed
         const SimulatorReport& failureReport() const
         { return failureReport_; }

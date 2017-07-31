@@ -225,6 +225,8 @@ enum WellVariablePositions {
 
             void print(const EvalWell& in) const;
 
+            void printWellState(std::ostream & s, const WellState & wellState) const;
+
             void computeAccumWells();
 
             void computeWellFlux(const int& w, const double& Tw, const IntensiveQuantities& intQuants, const std::vector<EvalWell>& mob_perfcells_dense,

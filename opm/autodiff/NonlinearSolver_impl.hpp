@@ -1,4 +1,4 @@
-/*
+﻿/*
   Copyright 2013, 2015 SINTEF ICT, Applied Mathematics.
   Copyright 2015 Dr. Blatt - HPC-Simulation-Software & Services
   Copyright 2015 NTNU
@@ -112,6 +112,21 @@ namespace Opm
     }
 
 
+    template <class PhysicalModel>
+    SimulatorReport
+    NonlinearSolver<PhysicalModel>::
+    runOneLinearization(const SimulatorTimerInterface& timer,
+         ReservoirState& initial_reservoir_state,
+         ReservoirState& final_reservoir_state,
+         WellState& final_well_state)
+    {
+        SimulatorReport report;
+        model_->oneLinearization(0, timer, *this, final_reservoir_state, final_well_state, initial_reservoir_state);
+        return report;
+    }
+
+
+
 
     template <class PhysicalModel>
     SimulatorReport
@@ -122,6 +137,7 @@ namespace Opm
          ReservoirState& reservoir_state,
          WellState& well_state)
     {
+        ReservoirState init_reservoir_state = reservoir_state;
         SimulatorReport iterReport;
         SimulatorReport report;
         failureReport_ = SimulatorReport();
@@ -142,7 +158,7 @@ namespace Opm
                 // Do the nonlinear step. If we are in a converged state, the
                 // model will usually do an early return without an expensive
                 // solve, unless the minIter() count has not been reached yet.
-                iterReport = model_->nonlinearIteration(iteration, timer, *this, reservoir_state, well_state);
+                iterReport = model_->nonlinearIteration(iteration, timer, *this, reservoir_state, well_state, init_reservoir_state);
 
                 report += iterReport;
                 report.converged = iterReport.converged;
