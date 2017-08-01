@@ -99,6 +99,7 @@ namespace Opm {
              ReservoirState& reservoir_state,
              WellState& well_state);
 
+        // Does not work as intended. Do not use.
         SimulatorReport
         runOneLinearization(const SimulatorTimerInterface& timer,
              ReservoirState& initial_reservoir_state,

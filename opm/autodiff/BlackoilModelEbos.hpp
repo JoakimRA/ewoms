@@ -372,7 +372,7 @@ namespace Opm {
 
                 report.update_time += perfTimer.stop();
             }
-            else{
+            else{ // Now we have converged
                 ReservoirState final_reservoir_state = reservoir_state;
 
                 //--------------------------------- Numerical jacobian  -----------------------------------------
@@ -382,23 +382,28 @@ namespace Opm {
                 const int nw = numWells();
                 const int nc = AutoDiffGrid::numCells(grid_);
 
-                enum StateTypes {OIL_PRESSURE = 1, WATER_SATURATION = 0};
-
-                std::vector<Scalar> stateValues(2); // Should not be needed as the difference should be the perturbation size...
+                // Residual containers:
                 std::vector<GlobalEqVector> residualsMB(2); // {f(x - dx/2), f(x + dx/2)}
+                std::vector<std::vector<std::vector<Scalar>>> residualsWE;
+                // Initialization of residualsWE:
+                for (std::size_t i=0; i < 2; ++i){
+                    std::vector<std::vector<Scalar >> tmp1;
+                    for (std::size_t j=0; j < 2; ++j){
+                        std::vector<Scalar> tmp2;
+                        for (std::size_t k=0; k < 3; ++k){
+                            tmp2.push_back(0);
+                        }
+                        tmp1.push_back(tmp2);
+                    }
+                    residualsWE.push_back(tmp1);
+                }
 
-
-
-
+                // The perturbation vectors
                 BVector dw(nw);
                 BVector dx(nc);
-                dx = 0;
 
-                // copy the states.
-                ReservoirState orgResState = reservoir_state;
-                WellState orgWellState = well_state;
-
-                auto& duneA = ebosSimulator_.model().linearizer().matrixA2(); // The gt
+                // The ground truth
+                auto& duneA = ebosSimulator_.model().linearizer().matrixA();
                 auto& duneB = wellModel().B();
                 auto& duneC = wellModel().C();
                 auto& duneD = wellModel().D();
@@ -505,32 +510,14 @@ namespace Opm {
 
                 std::vector<Scalar> pert_sizes = {-0.000001, -10}; // Using a negative value is the same as applying a positive perturbation.
 
-                std::vector<std::vector<std::vector<Scalar>>> residualsWE;
-                // Initialization of residualsWE:
-                for (std::size_t i=0; i < 2; ++i){
-                    std::vector<std::vector<Scalar >> tmp1;
-                    for (std::size_t j=0; j < 2; ++j){
-                        std::vector<Scalar> tmp2;
-                        for (std::size_t k=0; k < 3; ++k){
-                            tmp2.push_back(0);
-                        }
-                        tmp1.push_back(tmp2);
-                    }
-                    residualsWE.push_back(tmp1);
-                }
-
-
-
 
                 // Calculates the numerical A and C.
-                for(std::size_t cell_block=0; cell_block<9; ++cell_block){      // For each grid block.
-                    for(int stateType = 0; stateType<2; ++stateType){           // For each phase/state_variable in that grid block
+                for(std::size_t cell_block=0; cell_block<9; ++cell_block){         // For each grid block.
+                    for(int state_type = 0; state_type<2; ++state_type){           // For each phase/state_variable in that grid block
                         residualsMB[0] = 0; residualsMB[1] = 0;
-                        // resetting the well residual container:
+                        // Resetting the well residual container:
                         for (std::size_t i=0; i < residualsWE.size(); ++i){
-                            std::vector<std::vector<Scalar >> tmp1;
                             for (std::size_t j=0; j < residualsWE[i].size(); ++j){
-                                std::vector<Scalar> tmp2;
                                 for (std::size_t k=0; k < residualsWE[i][j].size(); ++k){
                                     residualsWE[i][j][k] = 0;
                                 }
@@ -539,16 +526,16 @@ namespace Opm {
 
                         for (int i = 0; i < 2; ++i){                            // We are doing central difference
 
-                            ReservoirState tmpResState = reservoir_state; // Copy
-                            WellState tmpWellState = well_state; //copy
+                            ReservoirState tmp_reservoir_state = reservoir_state; // Copy
+                            WellState tmp_well_state = well_state; //copy
                             dx = 0; // reset the perturbation vector
-                            dx[cell_block][stateType] = (i==0) ? -pert_sizes[stateType]/2 : pert_sizes[stateType]/2; // The first iteration calculates the f(x - dx/2)
+                            dx[cell_block][state_type] = (i==0) ? -pert_sizes[state_type]/2 : pert_sizes[state_type]/2; // The first iteration calculates the f(x - dx/2)
 
                             // Apply the perturbation to the reservoir state variable
-                            updateState(dx,tmpResState);
+                            updateState(dx,tmp_reservoir_state);
 
                             // Send this information to ebos (and also convert it to ebos format)
-                            convertInput( iteration, tmpResState, ebosSimulator_ );
+                            convertInput( iteration, tmp_reservoir_state, ebosSimulator_ );
 
                             // Delete the cache and recalculate.
                             ebosSimulator_.model().invalidateIntensiveQuantitiesCache(0); //0 is timeidx
@@ -563,7 +550,7 @@ namespace Opm {
 
                             //Run the well equations too.
                             double dt = timer.currentStepLength();
-                            wellModel().assemble(ebosSimulator_, iteration, dt, tmpWellState); // This will affect the residuals and the jacobian in ebosSimulator_
+                            wellModel().assemble(ebosSimulator_, iteration, dt, tmp_well_state); // This will affect the residuals and the jacobian in ebosSimulator_
 
 
                             // Get a copy of the residuals
@@ -576,25 +563,19 @@ namespace Opm {
                             residualsWE[i][1][1] = resWE_perturbed_column[3];
                             residualsMB[i] = resMB_perturbed;
 
-                            if (stateType == OIL_PRESSURE){
-                                stateValues[i] = tmpResState.pressure()[cell_block]; // pressure of oil
-                            }
-                            else if(stateType == WATER_SATURATION){
-                                stateValues[i] = tmpResState.saturation()[2*(cell_block)];  // saturation of water (times 2 because the variable also contains saturation of oil)
-                            }
                         }
 
                         // Calculate the numerical difference
                         for (std::size_t cell_block_res=0; cell_block_res < 9; ++cell_block_res){
                             for (std::size_t res_nr=0; res_nr < 2; ++res_nr){
                                 // (f(x+dx/2) - f(x-dx/2)) / (dx)
-                                numA[cell_block_res][cell_block][res_nr][stateType] = (residualsMB[1][cell_block_res][res_nr] - residualsMB[0][cell_block_res][res_nr])/((-pert_sizes[stateType]));
+                                numA[cell_block_res][cell_block][res_nr][state_type] = (residualsMB[1][cell_block_res][res_nr] - residualsMB[0][cell_block_res][res_nr])/((-pert_sizes[state_type]));
                             }
                         }
                         for (std::size_t cell_block_res=0; cell_block_res < 2; ++cell_block_res){
                             for (std::size_t res_nr=0; res_nr < 3; ++res_nr){
                                 // (f(x+dx/2) - f(x-dx/2)) / (dx)
-                                numC[cell_block_res][cell_block][res_nr][stateType] = (residualsWE[1][cell_block_res][res_nr] - residualsWE[0][cell_block_res][res_nr])/((-pert_sizes[stateType]));
+                                numC[cell_block_res][cell_block][res_nr][state_type] = (residualsWE[1][cell_block_res][res_nr] - residualsWE[0][cell_block_res][res_nr])/((-pert_sizes[state_type]));
                             }
                         }
                     }
@@ -602,12 +583,12 @@ namespace Opm {
                  //Dune::printmatrix(std::cout, numA, "numerical A", "row");
                  //Dune::printmatrix(std::cout, numC, "numerical C", "row");
 
-/*
+
                 Dune::printmatrix(std::cout, A, "AD A", "row");
                 Dune::printmatrix(std::cout, numA, "numerical A", "row");
                 calculateDifference(A, numA, &diffA);
                 Dune::printmatrix(std::cout, diffA, "A  difference", "row");
-
+/*
                 Dune::printmatrix(std::cout, C, "AD C", "row");
                 Dune::printmatrix(std::cout, numC, "numerical C", "row");
                 calculateDifference(C, numC, &diffC);
@@ -640,7 +621,6 @@ namespace Opm {
 
 
                 std::vector<Scalar> pert_sizes2 = {-0.000001, -0.000001, -10}; // Using a negative value is the same as applying a positive perturbation.
-                //std::vector<Scalar> pert_sizes2 = {-10, -0.0001, -0.0001}; // Using a negative value is the same as applying a positive perturbation.
 
                 // Calculating the numerical B and D
                 for(std::size_t well=0; well<2; ++well){      // For each well.
@@ -689,18 +669,13 @@ namespace Opm {
                             // Get a copy of the residuals
                             auto resMB_perturbed = ebosSimulator_.model().linearizer().residual();
                             auto resWE_perturbed_column = wellModel().residual(); // std::vector<double>
-                            auto resWExx = wellModel().residual2();
+                            auto resWE = wellModel().residualWE();
 
                             for (std::size_t wellnr = 0; wellnr < 2; ++wellnr){
                                 for (std::size_t resnr = 0; resnr < 3; ++resnr){
-                                    residualsWE[i][wellnr][resnr] = resWExx[wellnr][resnr];
+                                    residualsWE[i][wellnr][resnr] = resWE[wellnr][resnr];
                                 }
                             }
-
-                            //residualsWE[i][0][0] = resWE_perturbed_column[0];
-                            //residualsWE[i][1][0] = resWE_perturbed_column[1];
-                            //residualsWE[i][0][1] = resWE_perturbed_column[2];
-                            //residualsWE[i][1][1] = resWE_perturbed_column[3];
 
                             residualsMB[i] = resMB_perturbed;
 
@@ -762,10 +737,7 @@ namespace Opm {
                 double dt = timer.currentStepLength();
                 wellModel().assemble(ebosSimulator_, iteration, dt, tmpWellState); // This will affect the residuals and the jacobian in ebosSimulator_
 }
-                std::vector<int> fipnum(9);
-                for (size_t c = 0; c < fipnum.size(); ++c) {
-                    fipnum[c] = 1;
-                }
+
 /*
                 std::vector<Scalar> pert_sizes0 ={-0.000001, -10};
                 // Calculates the jacobian of the reservoir residuals w.r.t. the intial state.
@@ -970,15 +942,15 @@ namespace Opm {
             {
                 report = wellModel().assemble(ebosSimulator_, iterationIdx, dt, well_state);
 
-                // Take a deep copy of the A matrix, and store it in A2
+                // Take a deep copy of the matrix and store it in matrixA
                 const auto& ebosJacConst = ebosSimulator_.model().linearizer().matrix();
-                auto& A2 = ebosSimulator_.model().linearizer().matrixA2();
-                A2 = ebosJacConst;
+                auto& A = ebosSimulator_.model().linearizer().matrixA();
+                A = ebosJacConst;
 
 
                 // Take a deep copy of the ebosRes, and store it in ebosRes2
                 auto& ebosRes = ebosSimulator_.model().linearizer().residual();
-                auto& ebosRes2 = ebosSimulator_.model().linearizer().residual2();
+                auto& ebosRes2 = ebosSimulator_.model().linearizer().residualA();
                 for (int i = 0; i < 9; ++i){
                     for(int j = 0; j < 3; ++j){
                         ebosRes2[i][j] = ebosRes[i][j];

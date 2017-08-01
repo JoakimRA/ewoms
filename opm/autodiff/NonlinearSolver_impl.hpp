@@ -112,6 +112,7 @@ namespace Opm
     }
 
 
+    // Does not work as intended. Do not use.
     template <class PhysicalModel>
     SimulatorReport
     NonlinearSolver<PhysicalModel>::

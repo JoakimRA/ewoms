@@ -234,6 +234,29 @@ namespace Opm {
             SimulatorReport substepReport;
             std::string cause_of_failure = "";
             try {
+                State initial_reservoir_state = state;
+
+                substepReport = solver.step( substepTimer, state, well_state);
+                report += substepReport;
+
+                // Store the final states.
+                State final_reservoir_state = state;
+                WState final_well_state = well_state;
+
+                // -----------------------------------------------------------------------------------------------
+                // -----------------------------------------------------------------------------------------------
+                // --------------------------- Numerical jacobian w.r.t. the initial state -----------------------
+                // ---------------------------------------- DOES NOT WORK ----------------------------------------
+                // -----------------------------------------------------------------------------------------------
+
+                // We only need to create the 'A' matrix.
+                //  1. Perturb the initial solution by dx/2.
+                //  2. Run one linearization.
+                //  3. Store residuals.
+/*
+
+
+                // Initialization of all the matrices.
                 typedef double Scalar;
                 typedef Dune::FieldVector<Scalar, 3>            VectorBlockType;
                 typedef Dune::BlockVector<VectorBlockType>      BVector;
@@ -247,41 +270,8 @@ namespace Opm {
                 solver.model().denseInitializationOfBCRSMatrix(diffA0);
 
 
+                // Get a reference to the ebos simulator for convenience. The '2' is just because I made a public wrapper function.
                 auto& ebosSimulator = solver.model().ebosSimulator2();
-
-                State initial_reservoir_state = state;
-                WState initial_well_state = well_state;
-                substepReport = solver.step( substepTimer, state, well_state);
-                report += substepReport;
-                State final_reservoir_state = state;
-                WState final_well_state = well_state;
-
-
-
-
-                // -----------------------------------------------------------------------------------------------
-                // -----------------------------------------------------------------------------------------------
-                // -------------------------------- AD jacobian w.r.t. initial state -----------------------------
-                // -----------------------------------------------------------------------------------------------
-                // -----------------------------------------------------------------------------------------------
-
-
-
-
-
-                // -----------------------------------------------------------------------------------------------
-                // -----------------------------------------------------------------------------------------------
-                // ------------------------------- Numerical jacobian w.r.t. initial state -----------------------
-                // -----------------------------------------------------------------------------------------------
-                // -----------------------------------------------------------------------------------------------
-
-
-
-
-                // We only need to create the 'A' matrix.
-                //  1. Perturb the initial solution by dx/2.
-                //  2. Run the substep
-                //  3. Store residuals.
 
 
                 std::vector<std::vector<Dune::FieldVector<Scalar, 3>>> residualsMB;
@@ -300,8 +290,9 @@ namespace Opm {
                 dx0 = 0;
                 std::vector<Scalar> pert_sizes0 = {-0.000001, -10}; // Using a negative value is the same as applying a positive perturbation.
 
-                for(std::size_t cell_block=0; cell_block<9; ++cell_block){      // For each grid block.
-                    for(int stateType = 1; stateType<2; ++stateType){           // For each phase/state_variable in that grid block
+                for(std::size_t cell_block=0; cell_block<9; ++cell_block){      // For each grid/cell block.
+                    for(int state_type = 1; state_type<2; ++state_type){           // For each phase/state_variable in that grid block
+
                         // Resetting the residual container.
                         for (std::size_t i=0; i < residualsMB.size(); ++i){
                             for (std::size_t j=0; j < residualsMB[i].size(); ++j){
@@ -312,20 +303,18 @@ namespace Opm {
                         }
 
                         for (int i = 0; i < 2; ++i){                        // We are doing central difference
-                            State tmpInitialResState = initial_reservoir_state;    // Copy
-                            State tmpFinalResState = final_reservoir_state;
-                            WState tmpFinalWellState = initial_well_state;       // Copy
+                            State tmp_initial_reservoir_state = initial_reservoir_state;    // Copy
+                            State tmp_final_reservoir_state = final_reservoir_state;
+                            WState tmp_final_well_state = final_well_state;       // Copy
 
                             dx0 = 0; // Reset the perturbation vector
                             dx0[cell_block][stateType] = (i==0) ? -pert_sizes0[stateType]/2 : pert_sizes0[stateType]/2; // The first iteration calculates the f(x - dx/2)
 
-                            // Apply the perturbation to the reservoir state variable
-                            solver.model().updateState(dx0,tmpInitialResState);
-                            //std::vector<double>& pressures = tmpInitialResState.pressure();
-                            //pressures[cell_block] += (i==0) ? -pert_sizes0[stateType]/2 : pert_sizes0[stateType]/2;
+                            // Apply the perturbation to the initial reservoir state
+                            solver.model().updateState(dx0,tmp_initial_reservoir_state);
 
-                            // Run the substep
-                            solver.runOneLinearization( substepTimer, tmpInitialResState, tmpFinalResState, tmpFinalWellState);
+                            // Perform one linearization (Does not perform an update). DOES NOT WORK.
+                            solver.runOneLinearization( substepTimer, tmp_initial_reservoir_state, tmp_final_reservoir_state, tmp_final_well_state);
 
                             // Get a deep copy of the residuals
                             const auto resMB_perturbed = ebosSimulator.model().linearizer().residual();
@@ -341,7 +330,7 @@ namespace Opm {
                         for (std::size_t cell_block_res=0; cell_block_res < 9; ++cell_block_res){
                             for (std::size_t res_nr=0; res_nr < 2; ++res_nr){
                                 // (f(x+dx/2) - f(x-dx/2)) / (dx)
-                                numA0[cell_block_res][cell_block][res_nr][stateType] = (residualsMB[1][cell_block_res][res_nr] - residualsMB[0][cell_block_res][res_nr])/((-pert_sizes0[stateType]));
+                                numA0[cell_block_res][cell_block][res_nr][state_type] = (residualsMB[1][cell_block_res][res_nr] - residualsMB[0][cell_block_res][res_nr])/((-pert_sizes0[state_type]));
                             }
                         }
                     }
@@ -353,7 +342,7 @@ namespace Opm {
                 //solver.model().calculateDifference(A0, numA0, &diffA0);
                 //Dune::printmatrix(std::cout, diffA0, "A0  difference", "row");
 
-
+*/
 
 
                 if( solver_verbose_ ) {
